@@ -1,0 +1,29 @@
+plugins {
+    id 'com.github.blindpirate.gogradle' version '0.11.4'
+}
+
+golang {
+    packagePath = 'github.com/SevaGostev/loop-finder'
+}
+
+dependencies {
+    golang {
+        build 'github.com/jfreymuth/oggvorbis'
+    }
+}
+
+goBuild.dependsOn goCheck 
+
+goBuild {
+    //outputLocation = './loop-finder${GOEXE}'
+    go 'build -o ./loop-finder${GOEXE} -mod=readonly github.com/SevaGostev/loop-finder'
+}
+
+task v(type: com.github.blindpirate.gogradle.Go){
+    go 'version'
+}
+
+task ls(type: com.github.blindpirate.gogradle.Go){
+    dependsOn v 
+    run 'ls'
+}
