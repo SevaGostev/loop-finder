@@ -9,6 +9,7 @@ type DecodedFile struct {
 	
 	Samples []SampleBuffer
 	SampleRate int
+	Comments map[string]string
 }
 
 type SampleBuffer interface {

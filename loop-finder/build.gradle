@@ -15,7 +15,6 @@ dependencies {
 goBuild.dependsOn goCheck 
 
 goBuild {
-    //outputLocation = './loop-finder${GOEXE}'
     go 'build -o ./loop-finder${GOEXE} -mod=readonly github.com/SevaGostev/loop-finder'
 }
 

@@ -25,13 +25,22 @@ func main () {
 	}
 
 	if os.Args[1] == "-i" {
-		interactive()
+
+		if len(os.Args) == 2 {
+			interactive("")
+		} else {
+			if _, err := os.Stat(os.Args[2]); err != nil {
+				interactive("")
+			} else {
+				interactive(os.Args[2])
+			}
+		}
 	} else {
 		nonInteractive()
 	}
 }
 
-func interactive() {
+func interactive(baseDir string) {
 
 	fmt.Print("Interactive mode\n")
 
@@ -45,6 +54,8 @@ func interactive() {
 			break
 		}
 
+		input = strings.TrimSuffix(input, "\n")
+
 		if input == "" || input == "q" {
 			break
 		}
@@ -52,16 +63,16 @@ func interactive() {
 		tokens := strings.Split(input, ",")
 
 		if len(tokens) < 2 {
-			handleFile(input, 0)
+			handleFile(filepath.Join(baseDir, input), 0)
 		} else {
-			hint, err := strconv.Atoi(tokens[1])
+			hint, err := strconv.ParseUint(tokens[1], 10, 64)
 
 			if err != nil {
 				fmt.Print("Could not parse hint.\n")
 				continue
 			}
 
-			handleFile(tokens[0], uint64(hint))
+			handleFile(filepath.Join(baseDir, tokens[0]), hint)
 		}
 	}
 
@@ -102,14 +113,18 @@ func handleFile(fn string, hint uint64) bool {
 
 	if ext == ".ogg" {
 
-		ls, ll, err := handleOgg(f, hint)
+		ls, ll, oldll, err := handleOgg(f, hint)
 
 		if err != nil {
 			log.Printf("Could not analyze file: %s\nError: %v\n", name, err)
 			return false
 		}
 
-		fmt.Printf("%s__s%dl%d\n", nameNoExt, ls, ll)
+		if oldll == 0 {
+			fmt.Printf("%s__s%dl%d\n", nameNoExt, ls, ll)
+		} else {
+			fmt.Printf("%s__s%dl%d  (%d)\n", nameNoExt, ls, ll, oldll)
+		}
 		return true
 
 	} else {
@@ -118,22 +133,36 @@ func handleFile(fn string, hint uint64) bool {
 	}
 }
 
-func handleOgg(r *os.File, hint uint64) (uint64, uint64, error) {
+func handleOgg(r *os.File, hint uint64) (uint64, uint64, uint64, error) {
 
 	pcm, err := vorbis.Decode(r)
 
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	return getLoopData(pcm, hint, 8)
+	oldll := uint64(0)
+	oldllStr, ok := pcm.Comments["LOOPLENGTH"]
+
+	if ok {
+		var pErr error
+		oldll, pErr = strconv.ParseUint(oldllStr, 10, 64)
+
+		if pErr != nil {
+			oldll = uint64(0)
+		}
+	}
+
+	if hint == 0 && oldll != 0 {
+		hint = oldll
+	}
+
+	ls, ll, er := getLoopData(pcm, hint, 8)
+
+	return ls, ll, oldll, er
 }
 
 func getLoopData(pcm *data.DecodedFile, hint uint64, maxRoutines int) (uint64, uint64, error) {
-	
-	if pcm.Samples[0].Length() < uint64(pcm.SampleRate * 2) {
-		return 0, 0, errors.New("file is too short")
-	}
 
 	stage0 := make([]data.SampleBuffer, len(pcm.Samples)*2)
 
@@ -162,6 +191,10 @@ func getLoopData(pcm *data.DecodedFile, hint uint64, maxRoutines int) (uint64, u
 	} else {
 		start = stage0[0].Length() - (stage0[0].Length() / 4)
 		end = stage0[0].Length() - sectionLength
+	}
+
+	if start >= end {
+		return 0, 0, errors.New("file is too short")
 	}
 
 	best := analyze.AlignQueue{Aligns: make([]*analyze.Align, 0, 1)}

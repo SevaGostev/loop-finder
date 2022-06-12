@@ -3,10 +3,9 @@ package vorbis
 import (
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/SevaGostev/loop-finder/data"
-
-	//"github.com/xlab/vorbis-go/decoder"
 	"github.com/jfreymuth/oggvorbis"
 )
 
@@ -18,9 +17,12 @@ func Decode(r io.ReadSeeker) (*data.DecodedFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	
 
 	numChannels := dec.Channels()
 	length := dec.Length()
+	coms := dec.CommentHeader()
 
 	if length == 0 {
 		return nil, errors.New("could not determine length")
@@ -29,6 +31,17 @@ func Decode(r io.ReadSeeker) (*data.DecodedFile, error) {
 	out := data.DecodedFile{
 		Samples: make([]data.SampleBuffer, numChannels),
 		SampleRate: dec.SampleRate(),
+		Comments: make(map[string]string, len(coms.Comments)),
+	}
+
+	for _, com := range coms.Comments {
+		tokenized := strings.Split(com, "=")
+
+		if len(tokenized) < 2 {
+			continue
+		}
+
+		out.Comments[tokenized[0]] = tokenized[1]
 	}
 
 	for i := range out.Samples {
